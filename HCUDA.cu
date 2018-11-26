@@ -373,16 +373,30 @@ extern "C" {
         
         checkCublas(cublasCreate(&handle));
 
-        __half *d_A, *d_B, *d_C;
-        checkCuda(cudaMallocManaged(&d_A, N * N * sizeof(__half)));
-        checkCuda(cudaMallocManaged(&d_B, N * N * sizeof(__half)));
-        checkCuda(cudaMallocManaged(&d_C, N * N * sizeof(__half)));
+        __half *A, *B, *C, *d_A, *d_B, *d_C;
+        int halfArrSize = N * N * sizeof(__half);
+
+        //Allocate on CPU 
+        A = (__half *) malloc(halfArrSize);
+        B = (__half *) malloc(halfArrSize);
+        C = (__half *) malloc(halfArrSize);
+
+        //Allocate on GPU
+        checkCuda(cudaMallocManaged(&d_A, halfArrSize));
+        checkCuda(cudaMallocManaged(&d_B, halfArrSize));
+        checkCuda(cudaMallocManaged(&d_C, halfArrSize));
         
+        //Assign on CPU
         for (int i = 0; i < N * N; i++) {
-              d_A[i] = approx_float_to_half(lhPtr[i]);
-          	  d_B[i] = approx_float_to_half(rhPtr[i]);
-          	  d_C[i] = approx_float_to_half(resPtr[i]);
+              A[i] = approx_float_to_half(lhPtr[i]);
+          	  B[i] = approx_float_to_half(rhPtr[i]);
+          	  C[i] = approx_float_to_half(resPtr[i]);
         }
+
+        SyncHost2Dev(A, d_A, halfArrSize);
+        SyncHost2Dev(B, d_B, halfArrSize);
+        SyncHost2Dev(C, d_C, halfArrSize);
+
 
         int lda, ldb, ldc, m, n, k;
         const __half alf = approx_float_to_half(1.0);
@@ -420,12 +434,12 @@ extern "C" {
 
         printf("Time elapsed: %e", sum);
 
+        //Get result from GPU to CPU
+        SyncDev2Host(d_C, C, N * N * sizeof(__half));
+
         for (int i = 0; i < N * N; i++) {
-              d_A[i] = approx_float_to_half(lhPtr[i]);
-          	  d_B[i] = approx_float_to_half(rhPtr[i]);
-          	  d_C[i] = approx_float_to_half(resPtr[i]);
+          	  resPtr[i] = half_to_float(C[i]);
         }
-        
         
         //Free GPU memory
         cudaFree(d_A);
